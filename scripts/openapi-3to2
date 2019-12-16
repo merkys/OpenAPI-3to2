@@ -44,6 +44,7 @@ sub operation_3to2
     return {
         description => $operation_3->{description},
         parameters => [ map { parameter_3to2( $_ ) } @{$operation_3->{parameters}} ],
+        responses => $operation_3->{responses},
     };
 }
 
