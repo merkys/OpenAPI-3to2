@@ -1,0 +1,84 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Data::Dumper;
+use JSON;
+
+for my $filename (@ARGV) {
+    open( my $inp, $filename );
+    my $json_3 = decode_json( join '', <$inp> );
+    close $inp;
+
+    $json_3 = dereference( $json_3, $json_3 );
+
+    my $json_2 = {
+        swagger => '2.0',
+        info  => $json_3->{info},
+        paths => paths_3to2( $json_3->{paths} ),
+    };
+
+    print encode_json( $json_2 );
+}
+
+sub paths_3to2
+{
+    my( $paths_3 ) = @_;
+    return { map { ( $_ => path_3to2( $paths_3->{$_} ) ) }
+                 keys %$paths_3 };
+}
+
+sub path_3to2
+{
+    my( $path_3 ) = @_;
+    return { parameters => [ map { parameter_3to2( $_ ) }
+                                 @{$path_3->{parameters}} ],
+             map { ( $_ => operation_3to2( $path_3->{$_} ) ) }
+                 grep { $_ ne 'parameters' }
+                 keys %$path_3 };
+}
+
+sub operation_3to2
+{
+    my( $operation_3 ) = @_;
+    return {
+        description => $operation_3->{description},
+        parameters => [ map { parameter_3to2( $_ ) } @{$operation_3->{parameters}} ],
+    };
+}
+
+sub parameter_3to2
+{
+    my( $parameter_3 ) = @_;
+    my $type = $parameter_3->{schema}{type};
+    $type = 'string' unless $type;
+    return {
+        description => $parameter_3->{description},
+        name        => $parameter_3->{name},
+        in          => $parameter_3->{in},
+        required    => $parameter_3->{required},
+        type        => $type,
+    }
+}
+
+sub dereference
+{
+    my( $node, $root ) = @_;
+
+    if( ref $node eq 'ARRAY' ) {
+        @$node = map { dereference( $_, $root ) } @$node;
+    } elsif( ref $node eq 'HASH' ) {
+        my @keys = keys %$node;
+        if( scalar @keys == 1 && $keys[0] eq '$ref' ) {
+            my @path = split '/', $node->{'$ref'};
+            shift @path;
+            $node = $root;
+            while( @path ) {
+                $node = $node->{shift @path};
+            }
+        } else {
+            %$node = map { $_ => dereference( $node->{$_}, $root ) } @keys;
+        }
+    }
+    return $node;
+}
